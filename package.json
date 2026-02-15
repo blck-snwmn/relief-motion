@@ -1,0 +1,21 @@
+{
+  "name": "relief-motion",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "build": "bun run generate-manifest && vite build",
+    "preview": "vite preview",
+    "generate-depth": "bun run scripts/generate-depth.ts",
+    "generate-manifest": "bun run scripts/generate-manifest.ts"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5",
+    "vite": "^7.3.1"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.8.1"
+  }
+}
