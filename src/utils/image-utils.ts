@@ -16,11 +16,6 @@ export function getImageData(canvas: HTMLCanvasElement): ImageData {
   return ctx.getImageData(0, 0, canvas.width, canvas.height);
 }
 
-export function putImageData(canvas: HTMLCanvasElement, imageData: ImageData): void {
-  const ctx = getContext2D(canvas);
-  ctx.putImageData(imageData, 0, 0);
-}
-
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();

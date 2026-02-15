@@ -1,7 +1,7 @@
 import { DEFAULT_CONFIG } from "./core/config.ts";
 import type { AppConfig, ImagePair, SampleEntry, SampleManifest } from "./core/types.ts";
 import { extractLayers } from "./depth/layer-extractor.ts";
-import { generateTestDepthMap, loadImagePair } from "./depth/loader.ts";
+import { loadImagePair } from "./depth/loader.ts";
 import { createBackgroundFill, dilateAllLayers } from "./inpainting/edge-fill.ts";
 import { DragController } from "./interaction/drag-controller.ts";
 import { CanvasRenderer } from "./rendering/canvas-renderer.ts";
@@ -15,7 +15,7 @@ class App {
   private renderer: CanvasRenderer | null = null;
   private controller: DragController | null = null;
   private currentImagePair: ImagePair | null = null;
-  private currentSample = "test";
+  private currentSample = "";
   private samples: SampleEntry[] = [];
   private appEl: HTMLElement;
   private viewerArea!: HTMLElement;
@@ -30,6 +30,7 @@ class App {
     this.appEl.innerHTML = '<div class="loading">Loading...</div>';
 
     this.samples = await this.fetchSamples();
+    this.currentSample = this.samples[0]?.name ?? "";
 
     this.viewerArea = document.createElement("div");
     this.viewerArea.className = "viewer-area";
@@ -102,12 +103,9 @@ class App {
   }
 
   private async loadSample(): Promise<ImagePair> {
-    if (this.currentSample === "test") {
-      return generateTestDepthMap(VIEWER_SIZE, VIEWER_SIZE);
-    }
     const entry = this.samples.find((s) => s.name === this.currentSample);
     if (!entry) {
-      return generateTestDepthMap(VIEWER_SIZE, VIEWER_SIZE);
+      throw new Error(`Sample not found: ${this.currentSample}`);
     }
     return loadImagePair(
       `/samples/${entry.photo}`,

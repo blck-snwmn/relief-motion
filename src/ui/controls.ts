@@ -41,11 +41,6 @@ export class Controls {
     // サンプル切り替え
     const sampleGroup = this.createGroup("Sample");
     const select = document.createElement("select");
-    // Test Pattern は常に先頭
-    const testOpt = document.createElement("option");
-    testOpt.value = "test";
-    testOpt.textContent = "Test Pattern";
-    select.appendChild(testOpt);
     for (const s of this.samples) {
       const opt = document.createElement("option");
       opt.value = s.name;
