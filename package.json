@@ -8,10 +8,12 @@
     "build": "bun run generate-manifest && vite build",
     "preview": "vite preview",
     "generate-depth": "bun run scripts/generate-depth.ts",
-    "generate-manifest": "bun run scripts/generate-manifest.ts"
+    "generate-manifest": "bun run scripts/generate-manifest.ts",
+    "screenshot": "bun run scripts/screenshot.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",
+    "playwright": "^1.58.2",
     "typescript": "^5",
     "vite": "^7.3.1"
   },
