@@ -1,111 +1,76 @@
----
-description: Use Bun instead of Node.js, npm, pnpm, or vite.
-globs: "*.ts, *.tsx, *.html, *.css, *.js, *.jsx, package.json"
-alwaysApply: false
----
+# CLAUDE.md
 
-Default to using Bun instead of Node.js.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-- Use `bun <file>` instead of `node <file>` or `ts-node <file>`
-- Use `bun test` instead of `jest` or `vitest`
-- Use `bun build <file.html|file.ts|file.css>` instead of `webpack` or `esbuild`
-- Use `bun install` instead of `npm install` or `yarn install` or `pnpm install`
-- Use `bun run <script>` instead of `npm run <script>` or `yarn run <script>` or `pnpm run <script>`
-- Use `bunx <package> <command>` instead of `npx <package> <command>`
-- Bun automatically loads .env, so don't use dotenv.
+## Project Overview
 
-## APIs
+Browser-based depth parallax viewer inspired by iPhone's Spatial Scene. Takes a photo + pre-generated depth map pair and renders an interactive parallax effect where layers shift based on mouse/touch input.
 
-- `Bun.serve()` supports WebSockets, HTTPS, and routes. Don't use `express`.
-- `bun:sqlite` for SQLite. Don't use `better-sqlite3`.
-- `Bun.redis` for Redis. Don't use `ioredis`.
-- `Bun.sql` for Postgres. Don't use `pg` or `postgres.js`.
-- `WebSocket` is built-in. Don't use `ws`.
-- Prefer `Bun.file` over `node:fs`'s readFile/writeFile
-- Bun.$`ls` instead of execa.
+- **Stack:** Bun.serve() + Vanilla TypeScript (no framework, no bundler)
+- **Rendering:** Phase 1 = CSS transform (canvas + translate3d), Phase 2 = WebGL (planned)
+- **Depth maps:** Pre-generated externally (e.g., Depth Anything V2 via Hugging Face Transformers.js)
 
-## Testing
+## Commands
 
-Use `bun test` to run tests.
-
-```ts#index.test.ts
-import { test, expect } from "bun:test";
-
-test("hello world", () => {
-  expect(1).toBe(1);
-});
-```
-
-## Frontend
-
-Use HTML imports with `Bun.serve()`. Don't use `vite`. HTML imports fully support React, CSS, Tailwind.
-
-Server:
-
-```ts#index.ts
-import index from "./index.html"
-
-Bun.serve({
-  routes: {
-    "/": index,
-    "/api/users/:id": {
-      GET: (req) => {
-        return new Response(JSON.stringify({ id: req.params.id }));
-      },
-    },
-  },
-  // optional websocket support
-  websocket: {
-    open: (ws) => {
-      ws.send("Hello, world!");
-    },
-    message: (ws, message) => {
-      ws.send(message);
-    },
-    close: (ws) => {
-      // handle close
-    }
-  },
-  development: {
-    hmr: true,
-    console: true,
-  }
-})
-```
-
-HTML files can import .tsx, .jsx or .js files directly and Bun's bundler will transpile & bundle automatically. `<link>` tags can point to stylesheets and Bun's CSS bundler will bundle.
-
-```html#index.html
-<html>
-  <body>
-    <h1>Hello, world!</h1>
-    <script type="module" src="./frontend.tsx"></script>
-  </body>
-</html>
-```
-
-With the following `frontend.tsx`:
-
-```tsx#frontend.tsx
-import React from "react";
-import { createRoot } from "react-dom/client";
-
-// import .css files directly and it works
-import './index.css';
-
-const root = createRoot(document.body);
-
-export default function Frontend() {
-  return <h1>Hello, world!</h1>;
-}
-
-root.render(<Frontend />);
-```
-
-Then, run index.ts
+Always use `bun` instead of npm/yarn/pnpm/npx.
 
 ```sh
-bun --hot ./index.ts
+bun install              # Install dependencies
+bun run dev              # Bun.serve() dev server with HMR (port 3000)
+bun run build            # Generate manifest + bun build → dist/
+bun run generate-depth <image>  # Generate depth map using Depth Anything V2
+bun run screenshot       # Playwright rendering QA (captures 7 angles)
+bun run generate-manifest       # Regenerate public/samples/manifest.json
 ```
 
-For more information, read the Bun API docs in `node_modules/bun-types/docs/**.mdx`.
+No test runner is configured yet.
+
+## Architecture
+
+### Data Flow
+
+1. Load sample list from `public/samples/manifest.json`
+2. Load photo + depth image pair → `ImagePair` (photo canvas + Float32Array depth)
+3. Extract N depth layers with feathering → `DepthLayer[]` (separate canvas per layer)
+4. Apply edge dilation (inpainting) to fill parallax gaps
+5. Render layers with CSS `translate3d()` + `scale()` transforms
+6. Track mouse/touch input → smooth tilt interpolation → update transforms each frame
+
+### Module Structure
+
+| Directory | Purpose |
+|-----------|---------|
+| `src/core/` | `AppConfig` type + `DEFAULT_CONFIG` constants |
+| `src/depth/` | Image/depth loading (`loader.ts`), layer splitting (`layer-extractor.ts`) |
+| `src/rendering/` | `Renderer` interface + `CanvasRenderer` (CSS transforms) |
+| `src/interaction/` | Mouse/touch drag tracking with lerp smoothing |
+| `src/inpainting/` | Edge dilation to prevent gaps between parallax layers |
+| `src/ui/` | Control panel (sliders, sample selector) |
+| `src/utils/` | Canvas helpers, math (lerp) |
+| `scripts/` | Build-time tools (depth generation, manifest, screenshots) |
+
+### Key Types (src/core/types.ts)
+
+- **`AppConfig`** — All tunable parameters (layer count, parallax intensity, smoothing, edge fill, etc.)
+- **`ImagePair`** — Photo canvas + normalized depth Float32Array
+- **`DepthLayer`** — Single extracted layer with its own canvas, depth range, and parallax factor
+- **`SampleEntry`** — Photo/depth file paths from manifest
+
+### Entry Point
+
+`server.ts` → Bun.serve() で HTML imports + 静的ファイル配信。manifest 生成も起動時に実行。
+`src/main.ts` → `App` class orchestrates everything: loads manifest, initializes UI controls, handles sample selection, triggers layer extraction + rendering.
+
+## Sample Data
+
+Sample images live in `public/samples/` (gitignored). Each sample needs:
+- A photo (`.jpg`/`.png`)
+- A matching depth map with `_depth` suffix (e.g., `photo_depth.png`)
+- Both are auto-discovered by `scripts/generate-manifest.ts`
+
+## Build Notes
+
+- `server.ts` が起動時に `generateManifest()` を呼び出して `manifest.json` を再生成
+- `bun build ./index.html --outdir dist` で HTML imports による本番ビルド
+- Depth map values are normalized 0–1 from the R channel of the depth image
+- Layer parallax factor is calculated as `(layerIndex + 0.5) / layerCount`

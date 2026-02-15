@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 
-const port = process.argv[2] ?? "5173";
+const port = process.argv[2] ?? "3000";
 const outDir = join(import.meta.dir, "..", "screenshots");
 
 mkdirSync(outDir, { recursive: true });

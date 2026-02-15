@@ -6,7 +6,6 @@ import { createBackgroundFill, dilateAllLayers } from "./inpainting/edge-fill.ts
 import { DragController } from "./interaction/drag-controller.ts";
 import { CanvasRenderer } from "./rendering/canvas-renderer.ts";
 import { Controls } from "./ui/controls.ts";
-import "./style.css";
 
 const VIEWER_SIZE = 600;
 
