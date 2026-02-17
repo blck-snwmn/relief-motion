@@ -11,15 +11,16 @@ interface SliderDef {
   min: number;
   max: number;
   step: number;
+  mode?: "css";
 }
 
 const SLIDERS: SliderDef[] = [
-  { key: "layerCount", label: "Layers", min: 2, max: 10, step: 1 },
+  { key: "layerCount", label: "Layers", min: 2, max: 10, step: 1, mode: "css" },
   { key: "parallaxIntensity", label: "Intensity", min: 0.01, max: 0.1, step: 0.005 },
   { key: "smoothing", label: "Smoothing", min: 0.02, max: 0.3, step: 0.01 },
-  { key: "edgeFillWidth", label: "Edge Fill", min: 0, max: 20, step: 1 },
+  { key: "edgeFillWidth", label: "Edge Fill", min: 0, max: 20, step: 1, mode: "css" },
   { key: "baseScale", label: "Base Scale", min: 1.0, max: 1.15, step: 0.01 },
-  { key: "edgeFeather", label: "Feather", min: 0, max: 0.1, step: 0.005 },
+  { key: "depthBlur", label: "Depth Smooth", min: 0, max: 24, step: 1, mode: "css" },
 ];
 
 export class Controls {
@@ -27,6 +28,7 @@ export class Controls {
   private config: AppConfig;
   private callbacks: ControlsCallbacks;
   private samples: SampleEntry[];
+  private sliderGroups: Map<string, HTMLDivElement> = new Map();
 
   constructor(config: AppConfig, callbacks: ControlsCallbacks, samples: SampleEntry[]) {
     this.config = { ...config };
@@ -52,6 +54,24 @@ export class Controls {
     });
     sampleGroup.appendChild(select);
     this.panel.appendChild(sampleGroup);
+
+    // Mode 切り替え
+    const modeGroup = this.createGroup("Mode");
+    const modeSelect = document.createElement("select");
+    for (const [value, label] of [["webgl", "WebGL Shader"], ["css", "CSS Layers"]] as const) {
+      const opt = document.createElement("option");
+      opt.value = value;
+      opt.textContent = label;
+      if (value === this.config.rendererMode) opt.selected = true;
+      modeSelect.appendChild(opt);
+    }
+    modeSelect.addEventListener("change", () => {
+      this.config = { ...this.config, rendererMode: modeSelect.value as "css" | "webgl" };
+      this.callbacks.onConfigChange({ ...this.config });
+      this.updateSliderVisibility();
+    });
+    modeGroup.appendChild(modeSelect);
+    this.panel.appendChild(modeGroup);
 
     // スライダー群
     for (const def of SLIDERS) {
@@ -79,6 +99,10 @@ export class Controls {
       group.appendChild(input);
       group.appendChild(display);
       this.panel.appendChild(group);
+
+      if (def.mode) {
+        this.sliderGroups.set(def.key, group);
+      }
     }
 
     // Depth Inversion チェックボックス
@@ -92,6 +116,15 @@ export class Controls {
     });
     invertGroup.appendChild(checkbox);
     this.panel.appendChild(invertGroup);
+
+    this.updateSliderVisibility();
+  }
+
+  private updateSliderVisibility(): void {
+    const isWebGL = this.config.rendererMode === "webgl";
+    for (const group of this.sliderGroups.values()) {
+      group.style.display = isWebGL ? "none" : "";
+    }
   }
 
   private createGroup(label: string): HTMLDivElement {

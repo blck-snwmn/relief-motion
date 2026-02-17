@@ -1,12 +1,13 @@
 import type { DepthLayer } from "../core/types.ts";
 import { createCanvas, getContext2D } from "../utils/image-utils.ts";
 
-/** 元画像のコピーを背景として生成 (パララックスの隙間対策)
- * blur しない理由: CSS alpha 合成でレイヤー境界から背景が透けるため、
- * 背景色 = 元画像色にすることでライン状のアーティファクトを防止する */
+/** 元画像をぼかして背景として生成 (パララックスの隙間対策)
+ * レイヤーが動いて隙間から背景が見えてもゴーストにならないよう、
+ * 強めのブラーをかけて形状を不明瞭にする */
 export function createBackgroundFill(photo: HTMLCanvasElement): HTMLCanvasElement {
   const canvas = createCanvas(photo.width, photo.height);
   const ctx = getContext2D(canvas);
+  ctx.filter = "blur(30px)";
   ctx.drawImage(photo, 0, 0);
   return canvas;
 }
@@ -42,8 +43,7 @@ export function dilateLayer(layer: DepthLayer, iterations: number): void {
           dst.data[idx] = Math.round(r / count);
           dst.data[idx + 1] = Math.round(g / count);
           dst.data[idx + 2] = Math.round(b / count);
-          const t = iter / iterations;
-          dst.data[idx + 3] = Math.round(255 * (1 - t * t));
+          dst.data[idx + 3] = 255;
         }
       }
     }

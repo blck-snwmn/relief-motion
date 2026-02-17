@@ -8,7 +8,8 @@
     "build": "bun run generate-manifest && bun build ./index.html --outdir dist",
     "generate-depth": "bun run scripts/generate-depth.ts",
     "generate-manifest": "bun run scripts/generate-manifest.ts",
-    "screenshot": "bun run scripts/screenshot.ts"
+    "screenshot": "bun run scripts/screenshot.ts",
+    "inpaint": "bun run scripts/inpaint.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

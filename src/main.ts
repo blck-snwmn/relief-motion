@@ -1,23 +1,17 @@
 import { DEFAULT_CONFIG } from "./core/config.ts";
 import type { AppConfig, ImagePair, SampleEntry, SampleManifest } from "./core/types.ts";
-import { extractLayers } from "./depth/layer-extractor.ts";
 import { loadImagePair } from "./depth/loader.ts";
-import { createBackgroundFill, dilateAllLayers } from "./inpainting/edge-fill.ts";
 import { DragController } from "./interaction/drag-controller.ts";
-import { CanvasRenderer } from "./rendering/canvas-renderer.ts";
-import { Controls } from "./ui/controls.ts";
-
-const VIEWER_SIZE = 600;
+import { WebGLRenderer } from "./rendering/webgl-renderer.ts";
 
 class App {
   private config: AppConfig;
-  private renderer: CanvasRenderer | null = null;
+  private renderer: WebGLRenderer | null = null;
   private controller: DragController | null = null;
   private currentImagePair: ImagePair | null = null;
   private currentSample = "";
   private samples: SampleEntry[] = [];
   private appEl: HTMLElement;
-  private viewerArea!: HTMLElement;
 
   constructor() {
     this.config = { ...DEFAULT_CONFIG };
@@ -31,63 +25,70 @@ class App {
     this.samples = await this.fetchSamples();
     this.currentSample = this.samples[0]?.name ?? "";
 
-    this.viewerArea = document.createElement("div");
-    this.viewerArea.className = "viewer-area";
-
-    const title = document.createElement("h1");
-    title.textContent = "Relief Motion";
-    this.viewerArea.appendChild(title);
-
-    const controls = new Controls(this.config, {
-      onConfigChange: (config) => this.handleConfigChange(config),
-      onSampleChange: (name) => this.handleSampleChange(name),
-    }, this.samples);
-
     this.appEl.innerHTML = "";
-    this.appEl.appendChild(this.viewerArea);
-    this.appEl.appendChild(controls.getElement());
+
+    if (this.samples.length > 1) {
+      this.appEl.appendChild(this.createSampleSelector());
+    }
 
     const imagePair = await this.loadSample();
     this.showImagePair(imagePair);
+
+    window.addEventListener("resize", () => {
+      if (this.currentImagePair) this.showImagePair(this.currentImagePair);
+    });
+  }
+
+  private createSampleSelector(): HTMLElement {
+    const select = document.createElement("select");
+    select.className = "sample-selector";
+    for (const s of this.samples) {
+      const opt = document.createElement("option");
+      opt.value = s.name;
+      opt.textContent = s.label;
+      select.appendChild(opt);
+    }
+    select.addEventListener("change", async () => {
+      this.currentSample = select.value;
+      const imagePair = await this.loadSample();
+      this.showImagePair(imagePair);
+    });
+    return select;
   }
 
   private showImagePair(imagePair: ImagePair): void {
     this.controller?.destroy();
     this.renderer?.destroy();
 
-    const existingContainer = this.viewerArea.querySelector(".parallax-container");
-    if (existingContainer) existingContainer.remove();
+    const existing = this.appEl.querySelector(".parallax-container");
+    if (existing) existing.remove();
 
     this.currentImagePair = imagePair;
 
+    const { innerWidth: vw, innerHeight: vh } = window;
     const aspect = imagePair.width / imagePair.height;
-    const displayW = aspect >= 1 ? VIEWER_SIZE : Math.round(VIEWER_SIZE * aspect);
-    const displayH = aspect >= 1 ? Math.round(VIEWER_SIZE / aspect) : VIEWER_SIZE;
+    let displayW: number;
+    let displayH: number;
 
-    this.renderer = new CanvasRenderer(displayW, displayH);
-    this.applyLayers(imagePair);
+    if (vw / vh > aspect) {
+      displayH = vh;
+      displayW = Math.round(vh * aspect);
+    } else {
+      displayW = vw;
+      displayH = Math.round(vw / aspect);
+    }
 
-    this.viewerArea.appendChild(this.renderer.getContainer());
+    const webgl = new WebGLRenderer(displayW, displayH);
+    webgl.setSource(imagePair, this.config, this.currentSample);
+    this.renderer = webgl;
+
+    this.appEl.appendChild(webgl.getContainer());
 
     this.controller = new DragController(
-      this.renderer.getContainer(),
+      webgl.getContainer(),
       this.config.smoothing,
       (tilt) => this.renderer?.render(tilt),
     );
-  }
-
-  private applyLayers(imagePair: ImagePair): void {
-    if (!this.renderer) return;
-
-    const layers = extractLayers(imagePair, this.config);
-
-    if (this.config.edgeFillWidth > 0) {
-      dilateAllLayers(layers, this.config.edgeFillWidth);
-    }
-
-    const bgFill = createBackgroundFill(imagePair.photo);
-    this.renderer.setLayers(layers, this.config);
-    this.renderer.setBackgroundFill(bgFill);
   }
 
   private async fetchSamples(): Promise<SampleEntry[]> {
@@ -110,27 +111,6 @@ class App {
       `/samples/${entry.photo}`,
       `/samples/${entry.depth}`,
     );
-  }
-
-  private handleConfigChange(config: AppConfig): void {
-    const needsRebuild =
-      config.layerCount !== this.config.layerCount ||
-      config.edgeFeather !== this.config.edgeFeather ||
-      config.depthInversion !== this.config.depthInversion ||
-      config.edgeFillWidth !== this.config.edgeFillWidth;
-
-    this.config = config;
-    this.controller?.setSmoothing(config.smoothing);
-
-    if (needsRebuild && this.currentImagePair) {
-      this.applyLayers(this.currentImagePair);
-    }
-  }
-
-  private async handleSampleChange(name: string): Promise<void> {
-    this.currentSample = name;
-    const imagePair = await this.loadSample();
-    this.showImagePair(imagePair);
   }
 }
 

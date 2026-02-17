@@ -1,11 +1,12 @@
 export interface AppConfig {
+  rendererMode: "css" | "webgl";
   layerCount: number;
   parallaxIntensity: number;
   smoothing: number;
   edgeFillWidth: number;
   depthInversion: boolean;
   baseScale: number;
-  edgeFeather: number;
+  depthBlur: number;
 }
 
 export interface DepthLayer {

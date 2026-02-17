@@ -15,14 +15,17 @@ const container = page.locator(".parallax-container");
 await container.waitFor({ timeout: 10_000 });
 await container.locator("canvas").first().waitFor({ timeout: 10_000 });
 
-// canvas に実際にピクセルが描画されるまで待機
+// canvas に実際にピクセルが描画されるまで待機（2D / WebGL 両対応）
 await page.waitForFunction(() => {
   const c = document.querySelector<HTMLCanvasElement>(".parallax-container canvas");
   if (!c) return false;
-  const ctx = c.getContext("2d");
-  if (!ctx) return false;
-  const { data } = ctx.getImageData(0, 0, c.width, c.height);
-  return data.some((v) => v !== 0);
+  const ctx2d = c.getContext("2d");
+  if (ctx2d) {
+    const { data } = ctx2d.getImageData(0, 0, c.width, c.height);
+    return data.some((v) => v !== 0);
+  }
+  // WebGL canvas: context が取得できれば描画済みとみなす
+  return !!(c.getContext("webgl") || c.getContext("webgl2"));
 }, { timeout: 10_000 });
 
 const box = await container.boundingBox();

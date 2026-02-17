@@ -19,7 +19,7 @@ export function generateManifest(): void {
   // _depth を含まない画像ファイルを抽出
   const sourceImages = files.filter((f) => {
     const ext = extname(f).toLowerCase();
-    return IMAGE_EXTS.has(ext) && !f.includes("_depth");
+    return IMAGE_EXTS.has(ext) && !f.includes("_depth") && !f.includes("_inpainted") && !f.includes("_mask");
   });
 
   const samples = sourceImages

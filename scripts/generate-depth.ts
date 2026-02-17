@@ -1,59 +1,104 @@
 /**
- * Depth map 生成スクリプト
- * Usage: bun run scripts/generate-depth.ts <input-image> [output-path]
+ * Depth map 生成 + inpainting スクリプト
  *
- * 例:
- *   bun run scripts/generate-depth.ts public/samples/photo1.jpg
- *   → public/samples/photo1_depth.png に出力
+ * 引数なし: public/samples/ 内の全画像を一括処理
+ *   bun run generate-depth
  *
- *   bun run scripts/generate-depth.ts photo.jpg output_depth.png
- *   → output_depth.png に出力
+ * 引数あり: 指定画像のみ処理
+ *   bun run generate-depth public/samples/photo1.jpg
+ *
+ * --force: キャッシュを無視して再生成
+ *   bun run generate-depth -- --force
  */
 import { pipeline, RawImage } from "@huggingface/transformers";
+import { readdirSync, existsSync } from "node:fs";
 import { basename, dirname, extname, join, resolve } from "node:path";
 import { generateManifest } from "./generate-manifest.ts";
+import { inpaintBackground } from "./lib/gemini-inpaint.ts";
 
 const MODEL_ID = "onnx-community/depth-anything-v2-small";
+const SAMPLES_DIR = join(import.meta.dir, "..", "public", "samples");
+const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 
 async function main() {
-  const args = process.argv.slice(2);
-  if (args.length === 0) {
-    console.error("Usage: bun run scripts/generate-depth.ts <input-image> [output-path]");
-    process.exit(1);
+  const rawArgs = process.argv.slice(2);
+  const force = rawArgs.includes("--force");
+  const args = rawArgs.filter((a) => a !== "--force");
+
+  const targets = args.length > 0
+    ? [resolve(process.cwd(), args[0]!)]
+    : findSourceImages();
+
+  if (targets.length === 0) {
+    console.log("No source images found in public/samples/");
+    return;
   }
 
-  const inputPath = args[0]!;
-  const outputPath = args[1] ?? generateOutputPath(inputPath);
-
-  console.log(`Input:  ${inputPath}`);
-  console.log(`Output: ${outputPath}`);
-  console.log(`Model:  ${MODEL_ID}`);
+  console.log(`Model: ${MODEL_ID}`);
   console.log("Loading model...");
-
   const estimator = await pipeline("depth-estimation", MODEL_ID, {
     dtype: "fp32",
   });
 
-  console.log("Estimating depth...");
-  const image = await RawImage.read(resolve(process.cwd(), inputPath));
-  const result = await estimator(image);
+  for (const inputPath of targets) {
+    const depthPath = generateDepthOutputPath(inputPath);
+    const inpaintPath = generateInpaintOutputPath(inputPath);
 
-  // result.depth is a RawImage (grayscale)
-  const depthImage = result.depth as RawImage;
-  console.log(`Depth map size: ${depthImage.width}x${depthImage.height}`);
+    console.log(`\n=== ${basename(inputPath)} ===`);
 
-  await depthImage.save(outputPath);
-  console.log(`Saved: ${outputPath}`);
+    // Depth map 生成
+    if (!force && existsSync(depthPath)) {
+      console.log(`  Depth: skip (cached)`);
+    } else {
+      console.log(`  Estimating depth...`);
+      const image = await RawImage.read(inputPath);
+      const result = await estimator(image);
+      const depthImage = result.depth as RawImage;
+      console.log(`  Depth map: ${depthImage.width}x${depthImage.height}`);
+      await depthImage.save(depthPath);
+      console.log(`  Saved: ${depthPath}`);
+    }
 
-  console.log("Updating manifest...");
+    // Inpainting
+    const apiKey = process.env.GEMINI_API_KEY ?? "";
+    if (!apiKey) {
+      console.log("  Inpaint: skip (GEMINI_API_KEY not set)");
+    } else if (!force && existsSync(inpaintPath)) {
+      console.log("  Inpaint: skip (cached)");
+    } else {
+      console.log("  Inpainting background...");
+      await inpaintBackground(inputPath, depthPath, inpaintPath, apiKey);
+    }
+  }
+
+  console.log("\nUpdating manifest...");
   generateManifest();
+  console.log("Done!");
 }
 
-function generateOutputPath(inputPath: string): string {
+/** public/samples/ から _depth, _inpainted を除いた画像ファイルを列挙 */
+function findSourceImages(): string[] {
+  if (!existsSync(SAMPLES_DIR)) return [];
+  return readdirSync(SAMPLES_DIR)
+    .filter((f) => {
+      const ext = extname(f).toLowerCase();
+      return IMAGE_EXTS.has(ext) && !f.includes("_depth") && !f.includes("_inpainted") && !f.includes("_mask");
+    })
+    .map((f) => join(SAMPLES_DIR, f));
+}
+
+function generateDepthOutputPath(inputPath: string): string {
   const dir = dirname(inputPath);
   const ext = extname(inputPath);
   const name = basename(inputPath, ext);
   return join(dir, `${name}_depth.png`);
+}
+
+function generateInpaintOutputPath(inputPath: string): string {
+  const dir = dirname(inputPath);
+  const ext = extname(inputPath);
+  const name = basename(inputPath, ext);
+  return join(dir, `${name}_inpainted.png`);
 }
 
 main().catch((err) => {
