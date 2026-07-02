@@ -6,7 +6,7 @@
  *   bun run scripts/generate-manifest.ts
  *   bun run generate-manifest
  */
-import { readdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, writeFileSync } from "node:fs";
 import { basename, extname, join } from "node:path";
 
 const SAMPLES_DIR = join(import.meta.dirname!, "..", "public", "samples");
@@ -14,6 +14,7 @@ const MANIFEST_PATH = join(SAMPLES_DIR, "manifest.json");
 const IMAGE_EXTS = new Set([".png", ".jpg", ".jpeg", ".webp"]);
 
 export function generateManifest(): void {
+  mkdirSync(SAMPLES_DIR, { recursive: true });
   const files = readdirSync(SAMPLES_DIR);
 
   // _depth を含まない画像ファイルを抽出
