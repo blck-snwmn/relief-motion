@@ -17,6 +17,6 @@
     "typescript": "7.0.2"
   },
   "dependencies": {
-    "@huggingface/transformers": "^4.0.0"
+    "@huggingface/transformers": "4.2.0"
   }
 }
